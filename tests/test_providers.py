@@ -26,6 +26,22 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
             "https://example.test/custom/chat/completions",
         )
 
+    def test_local_http_endpoint_is_allowed(self):
+        provider = OpenAICompatibleProvider("http://localhost:9000/v1", "m", "")
+        self.assertEqual(provider.endpoint, "http://localhost:9000/v1/chat/completions")
+
+    def test_remote_http_endpoint_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "only for a local"):
+            OpenAICompatibleProvider("http://models.example.test/v1", "m", "secret")
+
+    def test_credentials_in_base_url_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Do not include credentials"):
+            OpenAICompatibleProvider("https://user:pass@example.test/v1", "m", "")
+
+    def test_non_absolute_endpoint_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "absolute HTTPS URL"):
+            OpenAICompatibleProvider("models.example.test/v1", "m", "")
+
     def test_sends_messages_and_parses_tool_calls(self):
         provider = OpenAICompatibleProvider(
             "https://example.test/v1", "example-model", "secret"

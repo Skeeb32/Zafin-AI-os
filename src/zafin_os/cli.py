@@ -57,7 +57,11 @@ def main() -> int:
         if not api_key and "api.openai.com" in base_url:
             print("Set ZAFIN_AI_API_KEY or use --demo.", file=sys.stderr)
             return 2
-        model = OpenAICompatibleProvider(base_url, model_name, api_key)
+        try:
+            model = OpenAICompatibleProvider(base_url, model_name, api_key)
+        except ValueError as exc:
+            print(f"Invalid model endpoint configuration: {exc}", file=sys.stderr)
+            return 2
 
     try:
         answer = AgentRuntime(model, registry, max_steps=args.max_steps).run(prompt)

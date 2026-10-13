@@ -122,6 +122,16 @@ print(answer)
 
 Tool functions execute inside the Python process with the permissions of that process. Register only functions that are safe for your application to expose. The runtime currently has no separate sandbox or permission system.
 
+The provider accepts HTTPS endpoints and local loopback HTTP endpoints. It rejects remote plain HTTP so API keys are not sent over an unencrypted connection. Use only endpoints you trust; credentials are sent to the configured HTTPS host.
+
+## Security and reliability limits
+
+- Model calls have a configurable transport timeout; retries, rate limiting, and concurrency controls are not implemented.
+- Tool calls are limited to functions registered by the application, but those functions are not sandboxed and run with the process's permissions.
+- API keys are read from environment variables in the CLI. There is no secret store, authentication layer, or multi-user authorization system.
+- The runtime returns tool exceptions to the model as error text. Applications should take care not to register tools that reveal sensitive exception details.
+- No production latency, cost, quality, or reliability measurements are collected.
+
 ## Project layout
 
 ```text
@@ -150,6 +160,7 @@ The suite covers tool registration and errors, bounded runtime execution, provid
 
 - [x] Bounded model/tool execution loop
 - [x] Explicit tool registration
+- [x] Reject remote plain-HTTP model endpoints
 - [x] OpenAI-compatible chat-completions adapter
 - [x] Offline demo with no credentials
 - [x] Add focused automated tests for tool calls, limits, and provider responses
@@ -168,7 +179,7 @@ Issues and pull requests are welcome. For changes to runtime behavior, include a
 
 ## For engineers
 
-This first milestone demonstrates a compact Python runtime, a provider boundary, explicit tool registration, JSON-based tool results, and a bounded execution loop. It is an early foundation, not a production agent platform: automated tests, persistence, observability, model routing, and execution isolation remain to be built.
+This first milestone demonstrates a compact Python runtime, a provider boundary, explicit tool registration, JSON-based tool results, and a bounded execution loop. It is an early foundation, not a production agent platform: persistence, observability, model routing, and execution isolation remain to be built.
 
 ## Follow the project
 

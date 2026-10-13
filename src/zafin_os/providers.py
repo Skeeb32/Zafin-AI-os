@@ -6,6 +6,7 @@ import json
 import urllib.error
 import urllib.request
 from typing import Any
+from urllib.parse import urlsplit
 
 from .runtime import ModelResponse, ToolCall
 
@@ -22,10 +23,28 @@ class OpenAICompatibleProvider:
     ) -> None:
         if not base_url.strip() or not model.strip():
             raise ValueError("base_url and model are required")
-        self.endpoint = self._completion_url(base_url.rstrip("/"))
+        validated_url = self._validate_base_url(base_url)
+        self.endpoint = self._completion_url(validated_url)
         self.model = model
         self.api_key = api_key
         self.timeout_seconds = timeout_seconds
+
+    @staticmethod
+    def _validate_base_url(base_url: str) -> str:
+        parsed = urlsplit(base_url)
+        if parsed.scheme not in {"https", "http"} or not parsed.hostname:
+            raise ValueError("base_url must be an absolute HTTPS URL")
+        if parsed.username or parsed.password:
+            raise ValueError("Do not include credentials in base_url")
+        if parsed.query or parsed.fragment:
+            raise ValueError("base_url cannot include a query or fragment")
+        if parsed.scheme == "http" and parsed.hostname.lower() not in {
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        }:
+            raise ValueError("Plain HTTP is allowed only for a local model endpoint")
+        return base_url.rstrip("/")
 
     @staticmethod
     def _completion_url(base_url: str) -> str:
