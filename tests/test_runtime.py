@@ -64,6 +64,31 @@ class ToolRegistryTests(unittest.TestCase):
         )
         self.assertEqual(json.loads(result), {"error": "Tool arguments must be a JSON object."})
 
+    def test_required_arguments_are_enforced(self):
+        result = registry_with_add().execute(ToolCall("call-1", "add", {"left": 20}))
+        self.assertEqual(
+            json.loads(result),
+            {"error": "Invalid arguments for tool add: arguments.right is required"},
+        )
+
+    def test_disallowed_arguments_are_rejected(self):
+        result = registry_with_add().execute(
+            ToolCall("call-1", "add", {"left": 20, "right": 22, "extra": True})
+        )
+        self.assertEqual(
+            json.loads(result),
+            {"error": "Invalid arguments for tool add: arguments.extra is not allowed"},
+        )
+
+    def test_argument_types_are_enforced(self):
+        result = registry_with_add().execute(
+            ToolCall("call-1", "add", {"left": "20", "right": 22})
+        )
+        self.assertEqual(
+            json.loads(result),
+            {"error": "Invalid arguments for tool add: arguments.left must be number"},
+        )
+
 
 class AgentRuntimeTests(unittest.TestCase):
     def test_executes_registered_tool_and_returns_final_response(self):

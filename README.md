@@ -18,7 +18,7 @@ The repository does **not** yet implement persistent memory, RAG, dynamic model 
 ## What works today
 
 - **Bounded tool loop:** caps how many tool rounds a model can request.
-- **Explicit tool allowlist:** the model can invoke only functions registered by the application; it cannot send arbitrary code to a shell.
+- **Explicit tool allowlist:** the model can invoke only functions registered by the application; the runtime checks required arguments, types, and extra keys before execution.
 - **OpenAI-compatible provider:** sends chat-completions requests using Python's standard library.
 - **Offline demo:** demonstrates a tool call without an API key or external service.
 - **Small Python core:** no runtime dependencies; requires Python 3.11 or newer.
@@ -129,7 +129,7 @@ The provider accepts HTTPS endpoints and local loopback HTTP endpoints. It rejec
 - Model calls have a configurable transport timeout; retries, rate limiting, and concurrency controls are not implemented.
 - Tool calls are limited to functions registered by the application, but those functions are not sandboxed and run with the process's permissions.
 - API keys are read from environment variables in the CLI. There is no secret store, authentication layer, or multi-user authorization system.
-- The runtime returns tool exceptions to the model as error text. Applications should take care not to register tools that reveal sensitive exception details.
+- The runtime returns validation errors and tool exceptions to the model as error text. Applications should take care not to register tools that reveal sensitive exception details. Argument validation covers common JSON Schema fields used by the runtime; it is not a complete JSON Schema implementation.
 - No production latency, cost, quality, or reliability measurements are collected.
 
 ## Project layout
@@ -161,6 +161,7 @@ The suite covers tool registration and errors, bounded runtime execution, provid
 - [x] Bounded model/tool execution loop
 - [x] Explicit tool registration
 - [x] Reject remote plain-HTTP model endpoints
+- [x] Validate tool arguments before execution
 - [x] OpenAI-compatible chat-completions adapter
 - [x] Offline demo with no credentials
 - [x] Add focused automated tests for tool calls, limits, and provider responses

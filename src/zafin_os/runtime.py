@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol
 
@@ -75,11 +76,70 @@ class ToolRegistry:
             return json.dumps({"error": f"Tool is not registered: {call.name}"})
         if not isinstance(call.arguments, dict):
             return json.dumps({"error": "Tool arguments must be a JSON object."})
+        validation_error = _validate_value(call.arguments, tool.parameters, "arguments")
+        if validation_error:
+            return json.dumps({"error": f"Invalid arguments for tool {call.name}: {validation_error}"})
         try:
             result = tool.handler(**call.arguments)
             return json.dumps({"result": result}, default=str)
         except Exception as exc:  # Return tool failures to the model for recovery.
             return json.dumps({"error": f"{type(exc).__name__}: {exc}"})
+
+
+def _matches_type(value: Any, expected: str) -> bool:
+    if expected == "object":
+        return isinstance(value, dict)
+    if expected == "array":
+        return isinstance(value, list)
+    if expected == "string":
+        return isinstance(value, str)
+    if expected == "boolean":
+        return isinstance(value, bool)
+    if expected == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected == "number":
+        return (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and (not isinstance(value, float) or math.isfinite(value))
+        )
+    if expected == "null":
+        return value is None
+    return False
+
+
+def _validate_value(value: Any, schema: dict[str, Any], path: str) -> str | None:
+    expected = schema.get("type")
+    if expected and not _matches_type(value, expected):
+        return f"{path} must be {expected}"
+    if "enum" in schema and value not in schema["enum"]:
+        return f"{path} must be one of the allowed values"
+
+    if isinstance(value, dict):
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        for name in required:
+            if name not in value:
+                return f"{path}.{name} is required"
+        for name, child in value.items():
+            child_schema = properties.get(name)
+            if child_schema is None:
+                additional = schema.get("additionalProperties", True)
+                if additional is False:
+                    return f"{path}.{name} is not allowed"
+                if isinstance(additional, dict):
+                    child_schema = additional
+            if child_schema is not None:
+                error = _validate_value(child, child_schema, f"{path}.{name}")
+                if error:
+                    return error
+
+    if isinstance(value, list) and isinstance(schema.get("items"), dict):
+        for index, item in enumerate(value):
+            error = _validate_value(item, schema["items"], f"{path}[{index}]")
+            if error:
+                return error
+    return None
 
 
 class AgentRuntime:
