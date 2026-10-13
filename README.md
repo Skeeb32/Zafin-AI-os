@@ -22,6 +22,7 @@ The repository does **not** yet implement persistent memory, RAG, dynamic model 
 - **OpenAI-compatible provider:** sends chat-completions requests using Python's standard library.
 - **Offline demo:** demonstrates a tool call without an API key or external service.
 - **Small Python core:** no runtime dependencies; requires Python 3.11 or newer.
+- **Automated checks:** standard-library unit tests, with a GitHub Actions workflow configured for Python 3.11 and 3.12.
 
 ## How a run works
 
@@ -124,6 +125,10 @@ Tool functions execute inside the Python process with the permissions of that pr
 ## Project layout
 
 ```text
+.github/workflows/tests.yml
+tests/
+├── test_providers.py
+└── test_runtime.py
 src/zafin_os/
 ├── cli.py        # Command line setup and built-in add tool
 ├── demo.py       # Offline scripted model
@@ -131,13 +136,24 @@ src/zafin_os/
 └── runtime.py    # Agent loop, message types, and tool registry
 ```
 
+## Tests
+
+Run the unit suite from the repository root:
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -v
+```
+
+The suite covers tool registration and errors, bounded runtime execution, provider URL handling, request construction, response parsing, and HTTP error reporting. It uses mocked HTTP responses and does not require API credentials or network access.
+
 ## Roadmap
 
 - [x] Bounded model/tool execution loop
 - [x] Explicit tool registration
 - [x] OpenAI-compatible chat-completions adapter
 - [x] Offline demo with no credentials
-- [ ] Add focused automated tests for tool calls, limits, and provider responses
+- [x] Add focused automated tests for tool calls, limits, and provider responses
+- [x] Configure a GitHub Actions workflow for Python 3.11 and 3.12
 - [ ] Add provider configuration and model routing
 - [ ] Add persistent run state and a documented memory interface
 - [ ] Explore retrieval with source citations
