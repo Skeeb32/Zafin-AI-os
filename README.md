@@ -1,88 +1,159 @@
 # Zafin AI OS
 
 <p align="center">
-  <strong>An open project exploring the foundations of an AI operating system.</strong><br />
-  A proposed direction for coordinating agents, models, memory, and tools.
+  <strong>A small, inspectable runtime for model-guided tool use.</strong><br />
+  Start locally, then connect an OpenAI-compatible chat-completions endpoint.
 </p>
 
 <p align="center">
   <a href="https://github.com/Skeeb32/Zafin-AI-os"><img alt="GitHub repository" src="https://img.shields.io/badge/GitHub-Zafin--AI--os-181717?logo=github"></a>
-  <img alt="Project status: planning" src="https://img.shields.io/badge/status-planning-blue">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
+  <img alt="Dependencies: none" src="https://img.shields.io/badge/runtime-dependencies%3A%20none-brightgreen">
 </p>
 
-> **Project status:** Planning. The repository currently contains no implementation, dependencies, tests, or deployment configuration. This README describes a possible project direction; the capabilities below are proposed and are not available yet.
+Zafin AI OS is an early agent-runtime project. Its first milestone implements a bounded request loop: a model can ask for an explicitly registered tool, the runtime executes that tool, and the result is returned to the model for a final response.
 
-## What this project aims to explore
+The repository does **not** yet implement persistent memory, RAG, dynamic model routing, sandboxed code execution, or cloud deployment.
 
-AI applications often combine models, tools, retrieval, and application code without a clear runtime boundary. **Zafin AI OS** is a proposed project to explore how those parts could fit together in a modular, inspectable system.
+## What works today
 
-The initial direction is to investigate:
+- **Bounded tool loop:** caps how many tool rounds a model can request.
+- **Explicit tool allowlist:** the model can invoke only functions registered by the application; it cannot send arbitrary code to a shell.
+- **OpenAI-compatible provider:** sends chat-completions requests using Python's standard library.
+- **Offline demo:** demonstrates a tool call without an API key or external service.
+- **Small Python core:** no runtime dependencies; requires Python 3.11 or newer.
 
-- Agent task orchestration and execution
-- Model selection and routing
-- Persistent state and retrieval-augmented generation (RAG)
-- Controlled tool use and code execution
-- Evaluation, observability, and operational safeguards
-
-These are goals for future development, not claims about the current repository.
-
-## Proposed system map
-
-The diagram is a conceptual starting point. It does not represent implemented components or verified interfaces.
+## How a run works
 
 ```mermaid
-flowchart LR
-    Request[Application request] --> Runtime[Proposed agent runtime]
-    Runtime --> Router[Proposed model routing]
-    Runtime --> Tools[Proposed tool execution]
-    Runtime --> Memory[Proposed memory and retrieval]
-    Router --> Models[Model providers]
-    Tools --> Integrations[External tools and services]
-    Memory --> Sources[Knowledge sources]
-    Runtime -. planned .-> Evaluation[Evaluation and observability]
+sequenceDiagram
+    participant User
+    participant Runtime
+    participant Model as Chat-completions endpoint
+    participant Tools as Registered tools
+    User->>Runtime: Prompt
+    Runtime->>Model: Messages and tool schemas
+    Model-->>Runtime: Tool request
+    Runtime->>Tools: Call allowlisted function
+    Tools-->>Runtime: JSON result or error
+    Runtime->>Model: Tool result
+    Model-->>Runtime: Final response
+    Runtime-->>User: Answer
 ```
 
-## Current capabilities
+## Quick start
 
-There are no runnable capabilities to list yet. The repository has no source tree or project configuration. The sections below describe candidate milestones and will be updated as code is added and verified.
+### Requirements
 
-## Roadmap
+- Python 3.11 or newer
+- An API key for a compatible model endpoint if you want to run a live request
 
-Proposed milestones, subject to design and implementation:
-
-- [ ] Define the project scope, supported use cases, and security boundaries
-- [ ] Choose an initial language, runtime, and dependency strategy
-- [ ] Implement a small, testable request and tool-execution path
-- [ ] Add model-provider interfaces and configuration examples
-- [ ] Explore persistent memory and retrieval with documented data flows
-- [ ] Add evaluation and operational visibility for implemented behavior
-- [ ] Document deployment options after a working local setup exists
-
-## Getting started
-
-The repository has no application code yet, so there is currently nothing to install or run. You can clone it to follow development:
+### Install
 
 ```bash
 git clone https://github.com/Skeeb32/Zafin-AI-os.git
 cd Zafin-AI-os
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
 ```
 
-Once the first runnable milestone is available, this section should include verified prerequisites, setup steps, environment variables, run commands, and test commands.
+### Run the offline demo
 
-## Technology
+```bash
+zafin-os --demo
+```
 
-No language, framework, database, model provider, or deployment platform has been selected in the repository yet. Technology badges and setup instructions will be added after those choices are reflected in code and configuration.
+The demo model requests the registered `add` tool and prints a final response. It uses a scripted model response, so it does not evaluate the prompt or contact a model provider.
+
+You can also run it from the source tree without installing the package:
+
+```bash
+PYTHONPATH=src python -m zafin_os --demo
+```
+
+### Connect a model endpoint
+
+Set the API key, model name, and (optionally) API base URL in your environment:
+
+```bash
+export ZAFIN_AI_API_KEY="your-api-key"
+export ZAFIN_AI_MODEL="your-model-name"
+# Optional. Defaults to https://api.openai.com/v1
+export ZAFIN_AI_BASE_URL="https://api.openai.com/v1"
+zafin-os "Add 20 and 22, then explain the result."
+```
+
+The base URL may be a service root, a `/v1` URL, or a full `/chat/completions` URL. Provider-specific authentication or request formats may require an adapter; compatibility depends on the endpoint's chat-completions and tool-calling behavior.
+
+## Add a tool
+
+Register application functions with a JSON Schema parameter definition. Only registered functions are exposed to the model:
+
+```python
+from zafin_os import AgentRuntime, ToolRegistry
+from zafin_os.providers import OpenAICompatibleProvider
+
+tools = ToolRegistry()
+tools.register(
+    name="add",
+    description="Add two numbers.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "left": {"type": "number"},
+            "right": {"type": "number"},
+        },
+        "required": ["left", "right"],
+        "additionalProperties": False,
+    },
+    handler=lambda left, right: left + right,
+)
+
+model = OpenAICompatibleProvider(
+    base_url="https://api.openai.com/v1",
+    model="gpt-4o-mini",
+    api_key="read-this-from-your-environment",
+)
+answer = AgentRuntime(model, tools, max_steps=8).run("What is 20 plus 22?")
+print(answer)
+```
+
+Tool functions execute inside the Python process with the permissions of that process. Register only functions that are safe for your application to expose. The runtime currently has no separate sandbox or permission system.
+
+## Project layout
+
+```text
+src/zafin_os/
+├── cli.py        # Command line setup and built-in add tool
+├── demo.py       # Offline scripted model
+├── providers.py  # OpenAI-compatible HTTP client
+└── runtime.py    # Agent loop, message types, and tool registry
+```
+
+## Roadmap
+
+- [x] Bounded model/tool execution loop
+- [x] Explicit tool registration
+- [x] OpenAI-compatible chat-completions adapter
+- [x] Offline demo with no credentials
+- [ ] Add focused automated tests for tool calls, limits, and provider responses
+- [ ] Add provider configuration and model routing
+- [ ] Add persistent run state and a documented memory interface
+- [ ] Explore retrieval with source citations
+- [ ] Add structured events and evaluation hooks
+- [ ] Design stronger isolation before supporting untrusted code execution
+
+Items without a checkmark are plans, not available features.
 
 ## Contributing
 
-Contributions will be easier to review once the project has an initial implementation and contribution guidelines. If you are interested in shaping the direction, open a GitHub issue describing the use case or design question you would like the project to address.
+Issues and pull requests are welcome. For changes to runtime behavior, include a short description of the use case and the expected tool or model interaction. Security-sensitive changes should explain the trust boundary and failure behavior.
 
-Before proposing production or security claims, tie them to working code, tests, and documented behavior.
+## For engineers
 
-## For engineers and recruiters
-
-At this stage, this repository demonstrates an early project concept only. It does not yet demonstrate agent orchestration, RAG, model routing, sandboxing, cloud deployment, or production operations. Those areas may become useful engineering milestones if they are implemented and validated.
+This first milestone demonstrates a compact Python runtime, a provider boundary, explicit tool registration, JSON-based tool results, and a bounded execution loop. It is an early foundation, not a production agent platform: automated tests, persistence, observability, model routing, and execution isolation remain to be built.
 
 ## Follow the project
 
-If this direction is useful to you, [watch the repository](https://github.com/Skeeb32/Zafin-AI-os) for updates. When implementation begins, the README will be revised to show working examples, architecture grounded in the code, and verified setup instructions.
+If you find this direction useful, [watch the repository](https://github.com/Skeeb32/Zafin-AI-os) for updates. Contributions that help make the runtime easier to inspect, test, and secure are welcome.
